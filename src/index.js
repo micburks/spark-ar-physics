@@ -1,193 +1,72 @@
-import CANNON from './cannon'
+const Diagnostics = require('Diagnostics')
+const Instruction = require('Instruction')
+const CameraInfo = require('CameraInfo')
+const Scene = require('Scene')
+const Time = require('Time')
+const fd = Scene.root
+  .child('Device')
+  .child('Camera')
+  .child('Focal Distance')
+const planeTracker = Scene.root.child('planeTracker0')
 
-export default class CannonHelper {
-  constructor(worldObjects) {
-    this.ShapeTypes = {
-      SPHERE: 1,
-      PLANE: 2,
-      BOX: 4,
-      COMPOUND: 8,
-      CONVEXPOLYHEDRON: 16,
-      HEIGHTFIELD: 32,
-      PARTICLE: 64,
-      CYLINDER: 128,
-      TRIMESH: 256
-    }
+import CannonHelper from 'spark-ar-physics'
 
-    // consts for stepping through time in the sim
-    this.fixedTimeStep = 1.0 / 30.0 // seconds
-    this.maxSubSteps = 3
+// show switch camera instructions on front camera
+Instruction.bind(CameraInfo.captureDevicePosition.eq(CameraInfo.CameraPosition.FRONT), 'flip_camera')
 
-    this.groundMaterial = new CANNON.Material()
+var floorPlane = planeTracker.child('plane0')
+var cube0 = planeTracker.child('Cube0')
+var sphere0 = planeTracker.child('Sphere0')
+var cube1 = planeTracker.child('Cube1')
+var sphere1 = planeTracker.child('Sphere1')
+var cube2 = planeTracker.child('Cube2')
+var sphere2 = planeTracker.child('Sphere2')
 
-    // pass them in at the beginning?
-    this.worldObjects = worldObjects
+var floor = CannonHelper.makeFloor()
 
-    // Init our world
-    this.world = new CANNON.World()
+// create the world objects
+// world objects contain a scenObject and a physicsObject
+var worldObjects = [
+  { sceneObject: floorPlane, physicsObject: floor },
+  {
+    sceneObject: cube0,
+    physicsObject: CannonHelper.makeBox({ x: 5, y: 5, z: 5 }, { x: 0, y: 40, z: 0 }, { x: 0.2, y: 0.8, z: 0, w: 0 })
+  },
+  {
+    sceneObject: cube1,
+    physicsObject: CannonHelper.makeBox({ x: 5, y: 5, z: 5 }, { x: 10, y: 40, z: 0 }, { x: 0.6, y: 0.2, z: 0, w: 0 })
+  },
+  {
+    sceneObject: cube2,
+    physicsObject: CannonHelper.makeBox({ x: 5, y: 5, z: 5 }, { x: 0, y: 30, z: 10 }, { x: 0.1, y: 0.2, z: 0.5, w: 0 })
+  },
+  {
+    sceneObject: sphere0,
+    physicsObject: CannonHelper.makeSphere({ x: 5 }, { x: 0, y: 30, z: 0 }, { x: 0.2, y: 0.5, z: 0, w: 0 })
+  },
+  {
+    sceneObject: sphere1,
+    physicsObject: CannonHelper.makeSphere({ x: 5 }, { x: 15, y: 60, z: 0 }, { x: 0.2, y: 0.5, z: 0, w: 0 })
+  },
+  {
+    sceneObject: sphere2,
+    physicsObject: CannonHelper.makeSphere({ x: 5 }, { x: 0, y: 50, z: 10 }, { x: 0.2, y: 0.5, z: 0, w: 0 })
+  }
+]
 
-    // expose the original cannon object for static methods
-    this.CANNON = CANNON
+// init the cannon world with the worldObjects
+var cannon = new CannonHelper(worldObjects)
 
-    // set the gravity
-    this.world.gravity.set(0, -19.82, 0) // m/s²
+var loopTimeMs = 30
+var lastTime
+Time.ms.interval(loopTimeMs).subscribe(function(elapsedTime) {
+  if (lastTime !== undefined) {
+    // get the time since the last update
+    var deltaTime = (elapsedTime - lastTime) / 1000
 
-    // set up the initial objects
-    this.worldObjects.forEach((worldObject, i) => {
-      // attempt to boost performance by making sleeping more agressive
-      // worldObject.physicsObject.sleepSpeedLimit = 1.0
-
-      // add the body to the world
-      // this.worldObjects[i].physicsObject = this.world.addBody(worldObject.physicsObject)
-      this.world.addBody(worldObject.physicsObject)
-
-      // sync the scale initially so that everything matches
-      //   this.syncScale(this.worldObjects[i], this.worldObjects[i].physicsObject)
-    })
+    // update the internal cannon world
+    cannon.update(deltaTime)
   }
 
-  bodyPos(cannonBody) {
-    // return new vec3(cannonBody.position.x, cannonBody.position.y, cannonBody.position.z)
-  }
-
-  // return the scale/size of a physics object
-  // use for scaling a sceneObject to match the physics world
-  bodyScale(cannonBody) {
-    // const shape = cannonBody.shapes[0]
-    // switch (shape.type) {
-    //   case this.ShapeTypes.SPHERE:
-    //     return new vec3(shape.radius, shape.radius, shape.radius)
-    //     break
-    //   case this.ShapeTypes.PLANE:
-    //     return new vec3(10, 10, 10)
-    //     break
-    //   case this.ShapeTypes.BOX:
-    //   default:
-    //     const size = shape.halfExtents
-    //     return new vec3(size.x / 8, size.y / 8, size.z / 8)
-    // }
-  }
-
-  addWorldObject(worldObject) {
-    this.world.addBody(worldObject.physicsObject)
-
-    this.worldObjects.push(worldObject)
-  }
-
-  syncPos(SceneObject, cannonBody) {
-    var transform = SceneObject.transform
-
-    transform.x = cannonBody.position.x
-    transform.y = cannonBody.position.y
-    transform.z = cannonBody.position.z
-
-    var rotation = {}
-    var rot = cannonBody.quaternion.toEuler(rotation)
-
-    transform.rotationX = rotation.x
-    transform.rotationY = rotation.y
-    transform.rotationZ = rotation.z
-  }
-
-  syncScale(sceneObject, cannonBody) {
-    // const transform = sceneObject.transform
-    // const physicsSize = this.bodyScale(cannonBody)
-    // set the scale
-  }
-
-  resetBody(cannonBody, pos) {
-    // Position
-    // body.position.setZero()
-    // body.previousPosition.setZero()
-    // body.interpolatedPosition.setZero()
-    // body.initPosition.setZero()
-
-    // orientation
-    // body.quaternion.set(0, 0, 0, 1)
-    // body.initQuaternion.set(0, 0, 0, 1)
-    // body.previousQuaternion.set(0, 0, 0, 1)
-    // body.interpolatedQuaternion.set(0, 0, 0, 1)
-    // Diagnostics.log(pos)
-    cannonBody.position = pos
-    // Velocity
-    cannonBody.velocity.setZero()
-    cannonBody.initVelocity.setZero()
-    cannonBody.angularVelocity.setZero()
-    cannonBody.initAngularVelocity.setZero()
-
-    // Force
-    cannonBody.force.setZero()
-    cannonBody.torque.setZero()
-
-    // body.angularVelocity = new CANNON.Vec3(0, 0, 0)
-    // body.velocity = new CANNON.Vec3(0, 0, 0)
-
-    cannonBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0)
-  }
-
-  update(stepTime) {
-    // step the sim, can just take fixed time
-    this.world.step(this.fixedTimeStep, stepTime, this.maxSubSteps)
-
-    // this.world.step(stepTime)
-
-    // for loop faster, really worth it?
-    for (var i = 0; i < this.worldObjects.length; i++) {
-      // const element = array[i];
-      this.syncPos(this.worldObjects[i].sceneObject, this.worldObjects[i].physicsObject)
-    }
-  }
-
-  static makeBox(size, position, rotation) {
-    var mat = new CANNON.Material()
-
-    return new CANNON.Body({
-      mass: 1,
-      position: new CANNON.Vec3(position.x, position.y, position.z),
-      shape: new CANNON.Box(new CANNON.Vec3(size.x, size.y, size.z)),
-      // if no rotation on W set something, seems to stall if nothing is set!
-      quaternion: new CANNON.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w || 0.5),
-      // quaternion: new CANNON.Quaternion(rotation.x || 0.5, rotation.y || 0.5, rotation.z || 0.5, rotation.w || 0.5),
-      material: mat
-      // DYNAMIC: 1
-      // fixedRotation: true
-      // linearDamping: 0.1,
-      // angularDamping: 0.5
-    })
-  }
-
-  static makeSphere(size, position, rotation) {
-    var mat = new CANNON.Material()
-
-    return new CANNON.Body({
-      mass: 1,
-      // position: new CANNON.Vec3(0, 10, -10),
-      // shape: new CANNON.Sphere(12)
-      position: new CANNON.Vec3(position.x, position.y, position.z),
-      shape: new CANNON.Sphere(size.x),
-      material: mat
-      // DYNAMIC: 1
-      // fixedRotation: true
-      // linearDamping: 0.1,
-      // angularDamping: 0.5
-    })
-  }
-
-  static makeFloor(size, position, rotation) {
-    var mat = new CANNON.Material()
-    // ground planes seem to be infinite in size...
-    var groundShape = new CANNON.Plane()
-    // const groundShape = new CANNON.Box(new CANNON.Vec3(1000, 1000, 1))
-    var groundBody = new CANNON.Body({
-      mass: 0, // mass == 0 makes the body static
-      material: mat,
-      shape: groundShape
-    })
-
-    // flip the ground axis to match Spark
-    // if this isn't done the ground plane will be facing the wrong way
-    groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
-
-    return groundBody
-  }
-}
+  lastTime = elapsedTime
+})
