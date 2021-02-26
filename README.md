@@ -38,7 +38,7 @@ npm install
 ### Open project in Spark
 
 
-File -> Open -> (Find `spark-ar-physics` directory)
+File -> Open -> (Find `spark-ar-physics/physicsTest/physicsTest.arproj`)
 
 ### Make changes
 
