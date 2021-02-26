@@ -15,8 +15,10 @@ module.exports = {
   },
   optimization: {
     // disable minification while debugging
-    // minimize: false
+    minimize: false
   },
+  // devtool: 'eval-source-map',
+  devtool: "source-map",
   output: {
     filename: 'script.js',
     path: path.resolve(__dirname, 'physicsTest', 'scripts')
